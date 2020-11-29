@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
 
 import serial, sys, os, subprocess
-import time, datetime
+import time, datetime, csv
+from glob import glob
+from subprocess import check_output, CalledProcessError
 
 fence = b'\x00\x00\x00\x00\xaaU\xaaU\xaaU\xaaU'
-
+	
 def getfile():
-  cmd = "/usr/bin/find /media -name ANCR*.DAT".split() 
-  S = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+
+  path_Linux = os.path.exists('/usr/bin/find /media')
+  path_USB_Mac = os.path.exists('/Volumes/Anchor_SD/')
+  path_USB = os.path.exists('D:/')
+  path_Linux = int(path_Linux)
+  path_USB_Mac = int(path_USB_Mac)
+  path_USB = int(path_USB)
+  
+  if path_Linux > 0:
+    cmd = '/usr/bin/find /media -name ANCR*.DAT'.split() 
+    path = '/usr/bin/find /media'
+  elif path_USB_Mac > 0:
+    cmd = 'ls /Volumes/Anchor_SD/ ANCR1025.DAT'    
+    path = '/Volumes/Anchor_SD/'
+  else:
+    cmd = 'dir D: ANCR*.DAT'
+    path = 'D:/'
+ 
+  S = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   R = S.communicate()
+  
   if not isinstance(R[0],bytes):
     print("SD card media file not found")
     sys.exit(1)
@@ -18,6 +38,9 @@ def getfile():
     name = candidate.split(b'/')[-1]
     if name.startswith(b'ANCR') and name.endswith(b'.DAT'): 
       F = candidate
+      F = F.decode()
+      F = path + F
+      F = F.encode()
       break
   if not F: 
     print("SD card media file not found")
@@ -25,7 +48,7 @@ def getfile():
   with open(F,'rb') as V:
     return V.read()  # entire content of file
 
-def procrec(P,offset):
+def procrec(P,offset,filename):
   p = P[offset:5+offset]
   ptime = p[3]*256*256*256 + p[2]*256*256 + p[1]*256 + p[0]
   if ptime > 1550000000:
@@ -43,14 +66,23 @@ def procrec(P,offset):
   for i in range(numrep):
     other,rssi = P[offset+newoffset+i*2],P[offset+newoffset+i*2+1]
     result += "[{0}:{1}] ".format(other,rssi)
-  sys.stdout.write(result + "\n")
+    
+  # sys.stdout.write(result + "\n")
+
+  result = result.split(" ")
+  deletion_index = [2, 3, 5, 6, 8]
+  result = [i for i in result if result.index(i) not in deletion_index]
+  with open(filename, "a+") as csvfile: 
+      csvwriter = csv.writer(csvfile, lineterminator="\n")
+      csvwriter.writerow(result)
+      
   return newoffset + 2*numrep
 
 def procblock(S):
   n = S[1]*256 + S[0] # number of records
   cursor = 2  # offset to where the first record starts
   for i in range(n): 
-    cursor += procrec(S,cursor)
+    cursor += procrec(S,cursor,filename)
 
 def convert():
   B = getfile()
@@ -59,8 +91,21 @@ def convert():
   for R in C:
     S = bytearray(R)    # make processing easy with array of int
     if not S: continue  # first element of split is empty (fence at begin) 
-    n = S[1]*256 + S[0] # node ID  
-    print("NODE",n)
+    #n = S[1]*256 + S[0] # node ID  
+    #print("NODE",n)
     procblock(S[2:])
 
+ 
+filename = "output.csv"
+if not os.path.exists(filename):
+    with open(filename, "w") as csvfile:  
+        csvwriter = csv.writer(csvfile, lineterminator="\n")
+        csvwriter.writerow(["Date", "Time", "rssi", "Badge", "?1", "?2", "?3"])
+else:
+    print("WARNING: File already exists")
+    sys.exit(1)
+    
+    
 convert()
+
+csvfile.close()
