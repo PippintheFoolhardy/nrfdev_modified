@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-import serial, sys, os, subprocess
-import time, datetime, csv
-from glob import glob
-from subprocess import check_output, CalledProcessError
+import sys, os, subprocess
+import datetime, csv
 
 fence = b'\x00\x00\x00\x00\xaaU\xaaU\xaaU\xaaU'
 	
@@ -94,13 +92,53 @@ def convert():
     #n = S[1]*256 + S[0] # node ID  
     #print("NODE",n)
     procblock(S[2:])
+    
+def return_anchor():
+
+  path_Linux = os.path.exists('/usr/bin/find /media')
+  path_USB_Mac = os.path.exists('/Volumes/Anchor_SD/')
+  path_USB = os.path.exists('D:/')
+  path_Linux = int(path_Linux)
+  path_USB_Mac = int(path_USB_Mac)
+  path_USB = int(path_USB)
+  
+  if path_Linux > 0:
+    cmd = '/usr/bin/find /media -name ANCR*.DAT'.split() 
+    path = '/usr/bin/find /media'
+  elif path_USB_Mac > 0:
+    cmd = 'ls /Volumes/Anchor_SD/ ANCR*.DAT'    
+    path = '/Volumes/Anchor_SD/'
+  else:
+    cmd = 'dir D: ANCR*.DAT'
+    path = 'D:/'
+ 
+  S = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+  R = S.communicate()
+  
+  if not isinstance(R[0],bytes):
+    print("SD card media file not found")
+    sys.exit(1)
+  L = R[0].split()
+  F = None
+  for candidate in L:
+    name = candidate.split(b'/')[-1]
+    if name.startswith(b'ANCR') and name.endswith(b'.DAT'): 
+      F = candidate
+      F = F.decode()
+      F = ''.join(filter(str.isdigit, F))
+      return F
+  if not F: 
+    print("SD card media file not found")
+    sys.exit(1)
 
  
-filename = "output.csv"
+anchor_number = return_anchor()
+filename = "output" + anchor_number + ".csv"
+
 if not os.path.exists(filename):
     with open(filename, "w") as csvfile:  
         csvwriter = csv.writer(csvfile, lineterminator="\n")
-        csvwriter.writerow(["Date", "Time", "rssi", "Badge", "?1", "?2", "?3"])
+        #csvwriter.writerow(["Date", "Time", "rssi", "Badge"])
 else:
     print("WARNING: File already exists")
     sys.exit(1)

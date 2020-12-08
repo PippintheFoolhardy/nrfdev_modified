@@ -11,9 +11,12 @@ if not os.path.exists(filename):
     combined_csv = pandas.concat([pandas.read_csv(f, sep = 's+', engine = 'python', header = None) for f in all_filenames ])
     combined_csv = combined_csv[0].str.split(',', expand=True)
     num_col = len(combined_csv.columns)
-    cols = ['Date 1', 'Time 1', 'RSSI', 'Badge', 'Date 2', 'Badge to Badge 1']
-    for i in range(6, num_col):
-    	cols.append(i)
+    cols = ['Date 1', 'Time 1', 'RSSI', 'Badge', 'Date 2']
+    string = 'Badge to Badge '
+
+    for i in range(5, num_col):
+    	new_string = string + str(i)
+    	cols.append(new_string)
 
     combined_csv.columns = cols
     combined_csv.to_csv(filename, index=False, encoding='utf-8-sig')
